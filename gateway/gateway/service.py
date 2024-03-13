@@ -74,6 +74,12 @@ class GatewayService(object):
             json.dumps({'id': product_data['id']}), mimetype='application/json'
         )
 
+    @http("DELETE", "/products/<string:product_id>", expected_exceptions=ProductNotFound)
+    def delete_product(self, request, product_id):
+        """Deletes a product with the given `product_id`."""
+        self.products_rpc.delete(product_id)
+        return Response(status=204)
+
     @http("GET", "/orders/<int:order_id>", expected_exceptions=OrderNotFound)
     def get_order(self, request, order_id):
         """Gets the order details for the order given by `order_id`.
@@ -172,3 +178,33 @@ class GatewayService(object):
             serialized_data['order_details']
         )
         return result['id']
+
+    @http("GET", "/orders", expected_exceptions=OrderNotFound)
+    def list_orders(self, request):
+        """Retrieves a list of all orders."""
+        orders = self._list_orders()
+        return Response(
+            json.dumps(orders),
+            mimetype='application/json'
+        )
+
+    def _list_orders(self):
+        orders = self.orders_rpc.list_orders()
+
+        # Retrieve all products from the products service
+        product_map = {prod['id']: prod for prod in self.products_rpc.list()}
+
+        # get the configured image root
+        image_root = config['PRODUCT_IMAGE_ROOT']
+
+        # Enhance order details with product and image details.
+        for order in orders:
+            for item in order['order_details']:
+                product_id = item['product_id']
+
+                if product_id in product_map:
+                    item['product'] = product_map[product_id]
+                    # Construct an image url.
+                    item['image'] = '{}/{}.jpg'.format(image_root, product_id)
+
+        return orders

@@ -292,3 +292,134 @@ class TestCreateOrder(object):
         assert response.status_code == 404
         assert response.json()['error'] == 'PRODUCT_NOT_FOUND'
         assert response.json()['message'] == 'Product Id unknown'
+
+
+class TestDeleteProduct(object):
+
+    def test_can_delete_product(self, gateway_service, web_session):
+        # simulate successful deletion by not raising an exception
+        gateway_service.products_rpc.delete.return_value = None
+
+        response = web_session.delete('/products/the_odyssey')
+
+        # check for successful deletion status code
+        assert response.status_code == 204
+        assert response.content == b''  # No content expected in response
+
+    def test_delete_product_not_found(self, gateway_service, web_session):
+        # simulate product not found by raising ProductNotFound exception
+        gateway_service.products_rpc.delete.side_effect = (
+            ProductNotFound('Product not found'))
+
+        response = web_session.delete('/products/unknown_product')
+
+        # check for not found status code
+        assert response.status_code == 404
+        payload = response.json()
+        assert payload['error'] == 'PRODUCT_NOT_FOUND'
+        assert payload['message'] == 'Product not found'
+
+
+class TestListOrders(object):
+
+    def test_can_list_orders(self, gateway_service, web_session):
+        # setup mock orders-service response
+        gateway_service.orders_rpc.list_orders.return_value = [
+            {
+                'id': 1,
+                'order_details': [
+                    {
+                        'id': 1,
+                        'quantity': 2,
+                        'product_id': 'the_odyssey',
+                        'price': '200.00'
+                    }
+                ]
+            },
+            {
+                'id': 2,
+                'order_details': [
+                    {
+                        'id': 3,
+                        'quantity': 1,
+                        'product_id': 'the_enigma',
+                        'price': '100.00'
+                    }
+                ]
+            }
+        ]
+
+        # setup mock products-service response
+        gateway_service.products_rpc.list.return_value = [
+            {
+                'id': 'the_odyssey',
+                'title': 'The Odyssey',
+                'maximum_speed': 3,
+                'in_stock': 899,
+                'passenger_capacity': 100
+            },
+            {
+                'id': 'the_enigma',
+                'title': 'The Enigma',
+                'maximum_speed': 200,
+                'in_stock': 1,
+                'passenger_capacity': 4
+            },
+        ]
+
+        # call the gateway service to list orders
+        response = web_session.get('/orders')
+
+        # check for successful retrieval status code
+        assert response.status_code == 200
+
+        # expected order details with populated product information
+        expected_response = [
+            {
+                'id': 1,
+                'order_details': [
+                    {
+                        'id': 1,
+                        'quantity': 2,
+                        'product_id': 'the_odyssey',
+                        'image':
+                            'http://example.com/airship/images/the_odyssey.jpg',
+                        'product': {
+                            'id': 'the_odyssey',
+                            'title': 'The Odyssey',
+                            'maximum_speed': 3,
+                            'in_stock': 899,
+                            'passenger_capacity': 100
+                        },
+                        'price': '200.00'
+                    }
+                ]
+            },
+            {
+                'id': 2,
+                'order_details': [
+                    {
+                        'id': 3,
+                        'quantity': 1,
+                        'product_id': 'the_enigma',
+                        'image':
+                            'http://example.com/airship/images/the_enigma.jpg',
+                        'product': {
+                            'id': 'the_enigma',
+                            'title': 'The Enigma',
+                            'maximum_speed': 200,
+                            'in_stock': 1,
+                            'passenger_capacity': 4
+                        },
+                        'price': '100.00'
+                    }
+                ]
+            }
+        ]
+
+        # assert the actual response matches the expected response
+        assert response.json() == expected_response
+
+
+
+
